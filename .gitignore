@@ -1,0 +1,8 @@
+node_modules/
+venv/
+*.keras
+*.h5
+*.dylib
+uploads/
+.env
+backend/.env

@@ -1,0 +1,6 @@
+runtime: python
+pythonVersion: "3.11"
+
+HF_REPO_ID = /my-model-weights
+ HF_MODEL_FILENAME = model_weights.pth
+ IMAGE_SIZE = 256

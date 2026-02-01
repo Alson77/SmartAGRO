@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlantCare AI - Disease Detection</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 30px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo {
+            font-size: 50px;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            color: #2d3748;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #718096;
+        }
+
+        .upload-area {
+            border: 3px dashed #cbd5e0;
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            background: #f7fafc;
+        }
+
+        .upload-area.has-file {
+            border-color: #43e97b;
+            background: #e6fffa;
+        }
+
+        .file-name {
+            margin-top: 10px;
+            color: #38a169;
+            font-weight: bold;
+            display: none;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            margin-top: 20px;
+            border: none;
+            border-radius: 15px;
+            font-size: 16px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            cursor: pointer;
+            display: none;
+        }
+
+        .result, .error {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 15px;
+        }
+
+        .result {
+            background: #e6fffa;
+            border-left: 5px solid #43e97b;
+        }
+
+        .error {
+            background: #fed7d7;
+            border-left: 5px solid #fc8181;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+    <div class="header">
+        <div class="logo">🌱</div>
+        <h1>Plant Disease Detection</h1>
+        <p class="subtitle">Upload a plant image to detect diseases</p>
+    </div>
+
+    <form action="/predict" method="post" enctype="multipart/form-data">
+        <div class="upload-area" id="uploadArea">
+            <p>📸 Click or drop image here</p>
+            <div class="file-name" id="fileName"></div>
+            <input type="file" name="file" id="fileInput" accept="image/*" required>
+        </div>
+
+        <button type="submit" id="submitBtn">Analyze Plant</button>
+    </form>
+
+    {% if result %}
+    <div class="result">
+        <h3>Result</h3>
+        <p><strong>Disease:</strong> {{ result.label }}</p>
+        <p><strong>Confidence:</strong> {{ result.confidence * 100 }}%</p>
+        <p><strong>Remedy:</strong> {{ result.remedy }}</p>
+    </div>
+    {% elif error %}
+    <div class="error">
+        <h3>Error</h3>
+        <p>{{ error }}</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    const uploadArea = document.getElementById("uploadArea");
+    const fileInput = document.getElementById("fileInput");
+    const fileName = document.getElementById("fileName");
+    const submitBtn = document.getElementById("submitBtn");
+
+    uploadArea.addEventListener("click", () => fileInput.click());
+
+    fileInput.addEventListener("change", () => {
+        if (fileInput.files.length > 0) {
+            fileName.textContent = `📁 ${fileInput.files[0].name}`;
+            fileName.style.display = "block";
+            submitBtn.style.display = "block";
+            uploadArea.classList.add("has-file");
+        }
+    });
+</script>
+
+</body>
+</html>

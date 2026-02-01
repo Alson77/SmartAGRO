@@ -1,0 +1,251 @@
+import tensorflow as tf
+import numpy as np
+from PIL import Image
+import io
+import os
+
+# -----------------------------
+# Config
+# -----------------------------
+MODEL_PATH = "model/AI_plant_diseases_detection.keras"  # relative path
+IMAGE_SIZE = 224
+
+# Class names (replace with your actual classes)
+class_names = [
+    'Apple___Apple_scab', 'Apple___Black_rot', 'Apple___Cedar_apple_rust', 'Apple___healthy',
+    'Blueberry___healthy', 'Cherry___Powdery_mildew', 'Cherry___healthy',
+    'Corn___Cercospora_leaf_spot', 'Corn___Common_rust', 'Corn___Northern_Leaf_Blight', 'Corn___healthy',
+    'Grape___Black_rot', 'Grape___Esca', 'Grape___Leaf_blight', 'Grape___healthy',
+    'Orange___Haunglongbing', 'Peach___Bacterial_spot', 'Peach___healthy',
+    'Pepper___Bacterial_spot', 'Pepper___healthy', 'Potato___Early_blight', 'Potato___Late_blight', 'Potato___healthy',
+    'Raspberry___healthy', 'Soybean___healthy', 'Squash___Powdery_mildew',
+    'Strawberry___Leaf_scorch', 'Strawberry___healthy', 'Tomato___Bacterial_spot',
+    'Tomato___Early_blight', 'Tomato___Late_blight', 'Tomato___Leaf_Mold',
+    'Tomato___Septoria_leaf_spot', 'Tomato___Spider_mites', 'Tomato___Target_Spot',
+    'Tomato___Yellow_Leaf_Curl_Virus', 'Tomato___Tomato_mosaic_virus', 'Tomato___healthy'
+]
+
+# -----------------------------
+# Disease Info (Descriptions + Remedies)
+# -----------------------------
+# -*- coding: utf-8 -*-
+# disease_info.py (Full Nepali version, formal language)
+disease_info = {
+     # ---------------- स्याउ (Apple) ----------------
+    "Apple___Apple_scab": {
+        "description": "स्याउ स्क्याब Venturia inaequalis फफूंदीले हुने रोग हो। यसले पात, फल, र साना टहनीमा कालो र खुरदुरा दागहरू बनाउँछ।",
+        "remedy": "रोग प्रतिरोधी स्याउ प्रजाति रोप्नुहोस्, कैप्टान वा म्यान्कोसेब जस्ता फफूंदी नाशक प्रयोग गर्नुहोस्, र झरेका पातहरू हटाएर फफूंदीको बीउ कम गर्नुहोस्।"
+    },
+    "Apple___Black_rot": {
+        "description": "कालो गलन Botryosphaeria obtusa फफूंदीले हुने रोग हो। यसले पात, फल र छालामा वृत्ताकार दागहरू बनाउँछ र फल सडाउँछ।",
+        "remedy": "संक्रमित टहनी काटेर हटाउनुहोस्, झरेका पात जलाउनुहोस्, र थायोफेनेट-मेथिल वा तामा आधारित छिड़काव गर्नुहोस्।"
+    },
+    "Apple___Cedar_apple_rust": {
+        "description": "सिडर स्याउ रस्ट Gymnosporangium juniperi-virginianae फफूंदीले हुने रोग हो। यसले पात र फलमा सुन्तला रंगका जेली जस्ता दागहरू बनाउँछ।",
+        "remedy": "सम्भव भए नजिकका सिडर रूख हटाउनुहोस्, वसन्तमा प्रारम्भिक फफूंदी नाशक छिड़काव गर्नुहोस्, र रोग प्रतिरोधी स्याउ प्रजाति रोप्नुहोस्।"
+    },
+    "Apple___healthy": {
+        "description": "यो स्याउको पात स्वस्थ छ र कुनै रोग छैन।",
+        "remedy": "नियमित सिंचाइ, छाँटकाँट, र पोषण व्यवस्थापन जारी राख्नुहोस्।"
+    },
+
+    # ---------------- ब्लूबेरी (Blueberry) ----------------
+    "Blueberry___healthy": {
+        "description": "ब्लूबेरी बिरुवा स्वस्थ छ र रोगको कुनै संकेत देखिँदैन।",
+        "remedy": "माटोको अम्लीयता कायम राख्नुहोस्, नियमित पानी दिनुहोस्, र मल्च लगाएर झार–झार रोक्नुहोस्।"
+    },
+
+    # ---------------- चेरी (Cherry) ----------------
+    "Cherry_(including_sour)___Powdery_mildew": {
+        "description": "पाउडरी मिल्ड्यू फफूंदी रोग हो जसले चेरीको पात र कांडमा सेतो पाउडर जस्ता दागहरू बनाउँछ।",
+        "remedy": "भीडभाड भएका टहनी काट्नुहोस्, हावा परिसंचरण सुधार गर्नुहोस्, र गन्धक वा निम तेलको छिड़काव गर्नुहोस्।"
+    },
+    "Cherry_(including_sour)___healthy": {
+        "description": "चेरीका पात स्वस्थ छन्, कुनै फफूंदी वा ब्याक्टेरियल संक्रमण छैन।",
+        "remedy": "उचित पानी र मल दिनुहोस्; सरसफाइ कायम राख्नुहोस्।"
+    },
+
+    # ---------------- मकै (Corn) ----------------
+    "Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot": {
+        "description": "ग्रे लीफ स्पट Cercospora जातिको फफूंदीले हुने रोग हो, जसले पातमा आयताकार खरानी दाग बनाउँछ।",
+        "remedy": "बाली घुमाउने गर्नुहोस्, रोग प्रतिरोधी हाइब्रिड प्रयोग गर्नुहोस्, र आवश्यक भए स्ट्रोबिलुरिन जस्ता फफूंदी नाशक छिड़काव गर्नुहोस्।"
+    },
+    "Corn_(maize)___Common_rust_": {
+        "description": "कमन रस्ट Puccinia sorghi फफूंदीले हुने रोग हो। यसले पातमा रातो-खैरो पोथ्री जस्ता दागहरू बनाउँछ।",
+        "remedy": "प्रतिरोधी प्रजाति प्रयोग गर्नुहोस् र रोग बढे फफूंदी नाशक छिड़काव गर्नुहोस्।"
+    },
+    "Corn_(maize)___Northern_Leaf_Blight": {
+        "description": "नर्दन लीफ ब्लाइट Exserohilum turcicum फफूंदीले हुने रोग हो, जसले पातमा लामो खरानी दाग बनाउँछ।",
+        "remedy": "प्रतिरोधी हाइब्रिड प्रयोग गर्नुहोस्, बाली घुमाउनुहोस्, र प्रारम्भिक चरणमा फफूंदी नाशक छिड़काव गर्नुहोस्।"
+    },
+    "Corn_(maize)___healthy": {
+        "description": "मकैका पात हरियो र स्वस्थ छन्।",
+        "remedy": "उचित नाइट्रोजन स्तर र सिंचाइ कायम राख्नुहोस्।"
+    },
+
+    # ---------------- अंगुर (Grape) ----------------
+    "Grape___Black_rot": {
+        "description": "कालो गलन Guignardia bidwellii फफूंदीले हुने रोग हो, जसले पातमा कालो दाग र फल सुकाउँछ।",
+        "remedy": "संक्रमित भाग काट्नुहोस्, हावा परिसंचरण सुधार गर्नुहोस्, र माइक्लोब्युटानिल जस्ता फफूंदी नाशक छिड़काव गर्नुहोस्।"
+    },
+    "Grape___Esca_(Black_Measles)": {
+        "description": "एस्का (ब्ल्याक मिजल्स) रोगले पात र फलमा कालो रेखा र दागहरू बनाउँछ र बाइनलाई मर्न पुर्‍याउँछ।",
+        "remedy": "संक्रमित बाइन हटाउनुहोस् र जलाउनुहोस्, घाउ नहोस्, र पानी निकास सुधार गर्नुहोस्।"
+    },
+    "Grape___Leaf_blight_(Isariopsis_Leaf_Spot)": {
+        "description": "पात ब्लाइट Pseudocercospora vitis फफूंदीले हुने रोग हो, जसले पातमा खैरो कोणीय दाग बनाउँछ।",
+        "remedy": "संक्रमित पात काट्नुहोस् र सुरक्षात्मक फफूंदी नाशक प्रयोग गर्नुहोस्।"
+    },
+    "Grape___healthy": {
+        "description": "अंगुरको बाइन स्वस्थ छ, पात हरियो र जीवन्त छन्।",
+        "remedy": "सन्तुलित मल र उचित छाँटकाँट गरेर हावा परिसंचरण सुधार गर्नुहोस्।"
+    },
+
+    # ---------------- सुन्तला (Orange) ----------------
+    "Orange___Haunglongbing_(Citrus_greening)": {
+        "description": "सिट्रस ग्रिनिङ (HLB) Candidatus Liberibacter ब्याक्टेरियाले हुने रोग हो, जसले हरा-पीला सिसाहरू र विकृत फल बनाउँछ।",
+        "remedy": "संक्रमित रूख हटाउनुहोस्, सायलिड कीरा नियन्त्रण गर्नुहोस्, र रोगरहित बीउ प्रयोग गर्नुहोस्।"
+    },
+
+    # ---------------- पीच (Peach) ----------------
+    "Peach___Bacterial_spot": {
+        "description": "ब्याक्टेरियल स्पट Xanthomonas campestris द्वारा हुने रोग हो, जसले पात र फलमा कालो दाग बनाउँछ।",
+        "remedy": "तामा आधारित ब्याक्टेरिसाइड प्रयोग गर्नुहोस् र माथि पानी दिने सिंचाइबाट बच्नुहोस्।"
+    },
+    "Peach___healthy": {
+        "description": "पीचका पात स्वस्थ छन्, रोगरहित छन्।",
+        "remedy": "राम्रो माटोको निकास सुनिश्चित गर्नुहोस् र रोग प्रतिरोधी प्रजाति प्रयोग गर्नुहोस्।"
+    },
+
+    # ---------------- खुर्सानी (Pepper, bell) ----------------
+    "Pepper,_bell___Bacterial_spot": {
+        "description": "बेल खुर्सानीमा ब्याक्टेरियल स्पट Xanthomonas जातिको कारणले हुने रोग हो, जसले गाढा दाग बनाउँछ।",
+        "remedy": "प्रमाणित बीउ प्रयोग गर्नुहोस्, बाली घुमाउनुहोस्, र रोकथामका लागि तामा आधारित फफूंदी नाशक छिड़काव गर्नुहोस्।"
+    },
+    "Pepper,_bell___healthy": {
+        "description": "बेल खुर्सानी स्वस्थ छ, कुनै रोग छैन।",
+        "remedy": "उचित पानी र कीरा नियन्त्रण कायम राख्नुहोस्।"
+    },
+
+    # ---------------- आलु (Potato) ----------------
+    "Potato___Early_blight": {
+        "description": "अर्ली ब्लाइट Alternaria solani फफूंदीले हुने रोग हो, जसले पातमा वृत्ताकार खैरो घेराहरू बनाउँछ।",
+        "remedy": "रोगरहित बीउ प्रयोग गर्नुहोस्, बाली घुमाउनुहोस्, र क्लोरोथालोनिल जस्ता फफूंदी नाशक प्रयोग गर्नुहोस्।"
+    },
+    "Potato___Late_blight": {
+        "description": "लेट ब्लाइट Phytophthora infestans फफूंदीले हुने रोग हो, जसले पात र आलुको भागमा कालो दाग बनाउँछ।",
+        "remedy": "भिजेको अवस्था टार्नुहोस्, प्रतिरोधी प्रजाति प्रयोग गर्नुहोस्, र मेटालाक्सिल जस्ता फफूंदी नाशक छिड़काव गर्नुहोस्।"
+    },
+    "Potato___healthy": {
+        "description": "आलु स्वस्थ छ, कुनै रोग वा ब्लाइट छैन।",
+        "remedy": "उचित हिलिङ र पानी व्यवस्थापन कायम राख्नुहोस्।"
+    },
+
+    # ---------------- रास्पबेरी (Raspberry) ----------------
+    "Raspberry___healthy": {
+        "description": "रास्पबेरी स्वस्थ छ, कुनै रोग छैन।",
+        "remedy": "उचित छाँटकाँट गर्नुहोस् र हावा परिसंचरण सुनिश्चित गर्नुहोस्।"
+    },
+
+    # ---------------- सोयाबिन (Soybean) ----------------
+    "Soybean___healthy": {
+        "description": "सोयाबिन स्वस्थ छ, कुनै रोगको संकेत छैन।",
+        "remedy": "बाली घुमाउनुहोस् र झार–झार नियन्त्रण गर्नुहोस्।"
+    },
+
+    # ---------------- स्क्वाश (Squash) ----------------
+    "Squash___Powdery_mildew": {
+        "description": "पाउडरी मिल्ड्यू पात र कांडमा सेतो पाउडर जस्ता दाग बनाउँछ।",
+        "remedy": "संक्रमित पात हटाउनुहोस्, हावा परिसंचरण सुधार गर्नुहोस्, र गन्धक आधारित फफूंदी नाशक छिड़काव गर्नुहोस्।"
+    },
+
+    # ---------------- स्ट्रबेरी (Strawberry) ----------------
+    "Strawberry___Leaf_scorch": {
+        "description": "लीफ स्कोर्चले पातमा रातो–खैरो दाग बनाउँछ र अन्ततः पात मर्न जान्छ।",
+        "remedy": "संक्रमित पात हटाउनुहोस्, माथि पानीबाट बच्नुहोस्, र रोग प्रतिरोधी प्रजाति प्रयोग गर्नुहोस्।"
+    },
+    "Strawberry___healthy": {
+        "description": "स्ट्रबेरी स्वस्थ छ, पात हरियो र तन्दुरुस्त छन्।",
+        "remedy": "पर्याप्त सूर्यप्रकाश र दूरी कायम गर्नुहोस्।"
+    },
+
+    # ---------------- टमाटर (Tomato) ----------------
+    "Tomato___Bacterial_spot": {
+        "description": "ब्याक्टेरियल स्पट Xanthomonas जातिले पात र फलमा साना कालो दाग बनाउँछ।",
+        "remedy": "रोगरहित बीउ प्रयोग गर्नुहोस्, तामा स्प्रे गर्नुहोस्, र बाली घुमाउनुहोस्।"
+    },
+    "Tomato___Early_blight": {
+        "description": "अर्ली ब्लाइट Alternaria solani फफूंदीले पुराना पातमा घेराबद्ध खैरो दाग बनाउँछ।",
+        "remedy": "संक्रमित पात काट्नुहोस्, हावा परिसंचरण सुधार गर्नुहोस्, र क्लोरोथालोनिल फफूंदी नाशक प्रयोग गर्नुहोस्।"
+    },
+    "Tomato___Late_blight": {
+        "description": "लेट ब्लाइट Phytophthora infestans फफूंदीले पात र फलमा ठूला पानी–सिक्त दाग बनाउँछ।",
+        "remedy": "माथि पानीबाट बच्नुहोस्, संक्रमित बिरुवा नष्ट गर्नुहोस्, र प्रणालीगत फफूंदी नाशक प्रयोग गर्नुहोस्।"
+    },
+    "Tomato___Leaf_Mold": {
+        "description": "पात मोल्ड Passalora fulva फफूंदीले पातको माथिल्लो भागमा पहेँलो दाग बनाउँछ।",
+        "remedy": "हावा परिसंचरण सुधार्नुहोस्, आर्द्रता कम गर्नुहोस्, र तामा आधारित फफूंदी नाशक छिड़काव गर्नुहोस्।"
+    },
+    "Tomato___Septoria_leaf_spot": {
+        "description": "सेप्टोरिया लीफ स्पटले साना वृत्ताकार दाग बनाउँछ, केन्द्र खरानी हुन्छ।",
+        "remedy": "संक्रमित पात हटाउनुहोस्, पात सुक्खा राख्नुहोस्, र म्यान्कोसेब जस्ता फफूंदी नाशक प्रयोग गर्नुहोस्।"
+    },
+    "Tomato___Spider_mites Two-spotted_spider_mite": {
+        "description": "स्पाइडर माइटले पातमा पहेँलो–खैरो धब्बा र जाल बनाउँछ, जसले पात झर्न सक्छ।",
+        "remedy": "निम तेल वा कीट नाशक साबुन छिड़काव गर्नुहोस् र आर्द्रता कायम गर्नुहोस्।"
+    },
+    "Tomato___Target_Spot": {
+        "description": "टार्गेट स्पट Corynespora cassiicola फफूंदीले लक्ष्य–जस्तो घेराबद्ध दाग बनाउँछ।",
+        "remedy": "संक्रमित पात हटाउनुहोस्, बाली घुमाउनुहोस्, र रोकथामका लागि फफूंदी नाशक छिड़काव गर्नुहोस्।"
+    },
+    "Tomato___Tomato_Yellow_Leaf_Curl_Virus": {
+        "description": "यस भाइरल रोगले पात माथि ताने जस्तो मोडिन्छ र बिरुवा झन् स–छोटो हुन्छ।",
+        "remedy": "ह्वाइटफ्लाई नियन्त्रण गर्नुहोस्, संक्रमित बिरुवा हटाउनुहोस्, र रोग प्रतिरोधी प्रजाति प्रयोग गर्नुहोस्।"
+    },
+    "Tomato___Tomato_mosaic_virus": {
+        "description": "TMV ले पातमा मोजाइक जस्तो धब्बा र विकृति ल्याउँछ।",
+        "remedy": "तम्बाकू प्रयोग पछि बिरुवा छोएन, उपकरण सफा गर्नुहोस्, र प्रतिरोधी प्रजाति प्रयोग गर्नुहोस्।"
+    },
+    "Tomato___healthy": {
+        "description": "टमाटर स्वस्थ छ, कुनै रोग छैन।",
+        "remedy": "नियमित पानी र पोषणको सन्तुलन कायम राख्नुहोस्।"
+    }
+}
+
+# -----------------------------
+# Load Model
+# -----------------------------
+def load_model():
+    model = tf.keras.models.load_model(MODEL_PATH)
+    print("✅ Model loaded successfully")
+    return model
+
+# -----------------------------
+# Preprocess Image
+# -----------------------------
+def preprocess_image(image: Image.Image):
+    image = image.resize((IMAGE_SIZE, IMAGE_SIZE))
+    image = np.array(image).astype("float32") / 255.0
+    image = np.expand_dims(image, axis=0)
+    return image
+
+# -----------------------------
+# Predict Function
+# -----------------------------
+def predict(image_bytes: bytes, model):
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img = preprocess_image(image)
+    predictions = model.predict(img)
+    idx = np.argmax(predictions[0])
+    label = class_names[idx]
+    confidence = float(predictions[0][idx]) * 100  # % confidence
+    info = disease_info.get(label, {
+        "description": "यस रोगको विस्तृत जानकारी उपलब्ध छैन।",
+        "remedy": "कृषि विज्ञसँग परामर्श गर्नुहोस्।"
+    })
+    return {
+        "label": label,
+        "confidence": round(confidence, 2),
+        "description": info["description"],
+        "remedy": info["remedy"]
+    }
