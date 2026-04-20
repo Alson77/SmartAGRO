@@ -6,6 +6,7 @@ const Farmer = require('../models/Farmer');
 const Admin = require('../models/Admin');
 const SubsidyApplication = require('../models/SubsidyApplication');
 const CropIssue = require('../models/CropIssue');
+const ExpertBooking = require('../models/ExpertBooking');
 
 // Admin login using Admin collection
 router.post('/login', async (req, res) => {
@@ -45,6 +46,48 @@ router.post('/login', async (req, res) => {
     });
   } catch (err) {
     console.error('Error:', err.message); // Log the error
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// Admin registration (optional)
+router.post('/register', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: 'Name, email, and password are required' });
+    }
+
+    const existing = await Admin.findOne({ email });
+    if (existing) {
+      return res.status(400).json({ message: 'Admin user already exists' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const admin = new Admin({
+      name,
+      email,
+      passwordHash,
+      role: 'admin',
+      status: 'active',
+      permissions: ['read', 'write']
+    });
+
+    await admin.save();
+
+    res.status(201).json({
+      message: 'Admin registered successfully',
+      admin: {
+        id: admin._id,
+        name: admin.name,
+        email: admin.email,
+        role: admin.role,
+        status: admin.status
+      }
+    });
+  } catch (err) {
+    console.error('Error:', err.message);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
@@ -309,6 +352,110 @@ router.get('/issue-severity-stats', async (req, res) => {
     res.json(stats);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching severity stats', error: err.message });
+  }
+});
+
+// GET /api/admin/bookings - Get all expert bookings
+router.get('/bookings', async (req, res) => {
+  try {
+    const { status } = req.query;
+    
+    let filter = {};
+    if (status) {
+      filter.status = status;
+    }
+
+    const bookings = await ExpertBooking.find(filter)
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const totalCount = await ExpertBooking.countDocuments(filter);
+    const confirmedCount = await ExpertBooking.countDocuments({ status: 'confirmed' });
+    const pendingCount = await ExpertBooking.countDocuments({ status: 'pending' });
+    const completedCount = await ExpertBooking.countDocuments({ status: 'completed' });
+    const cancelledCount = await ExpertBooking.countDocuments({ status: 'cancelled' });
+
+    res.json({
+      success: true,
+      total: totalCount,
+      confirmed: confirmedCount,
+      pending: pendingCount,
+      completed: completedCount,
+      cancelled: cancelledCount,
+      bookings
+    });
+  } catch (err) {
+    console.error('Error fetching bookings:', err);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching bookings', 
+      error: err.message 
+    });
+  }
+});
+
+// GET /api/admin/bookings/:bookingId - Get booking details
+router.get('/bookings/:bookingId', async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const booking = await ExpertBooking.findById(bookingId).lean();
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      booking
+    });
+  } catch (err) {
+    console.error('Error fetching booking:', err);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching booking', 
+      error: err.message 
+    });
+  }
+});
+
+// PUT /api/admin/bookings/:bookingId - Update booking status
+router.put('/bookings/:bookingId', async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const { status, paymentStatus } = req.body;
+
+    const updateData = {};
+    if (status) updateData.status = status;
+    if (paymentStatus) updateData.paymentStatus = paymentStatus;
+
+    const updatedBooking = await ExpertBooking.findByIdAndUpdate(
+      bookingId,
+      updateData,
+      { new: true }
+    );
+
+    if (!updatedBooking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Booking updated successfully',
+      booking: updatedBooking
+    });
+  } catch (err) {
+    console.error('Error updating booking:', err);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error updating booking', 
+      error: err.message 
+    });
   }
 });
 

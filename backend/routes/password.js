@@ -39,9 +39,9 @@ router.post('/forgot-password', async (req, res) => {
   const transporter = createTransporter();
   const fromAddress = process.env.EMAIL_USER;
       const mailOptions = {
-  from: `"Krishi Sathi" <${fromAddress}>`,
+  from: `"SmartAgro" <${fromAddress}>`,
         to: email,
-  subject: 'Your Krishi Sathi OTP for password reset',
+  subject: 'Your SmartAgro OTP for password reset',
         html: `<p>Hi ${farmer.name || 'Farmer'},</p>
                <p>Your OTP to reset your password is: <strong>${otp}</strong></p>
                <p>This OTP is valid for 15 minutes. If you didn't request this, please ignore.</p>`

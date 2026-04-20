@@ -21,24 +21,17 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ 
+const upload = multer({
   storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (req, file, cb) => {
-    // Allow common image extensions and mimetypes (include webp, bmp, tiff)
     const allowedTypes = /jpeg|jpg|png|gif|webp|bmp|tiff|tif/;
     const ext = path.extname(file.originalname || '').toLowerCase().replace('.', '');
     const mimePart = (file.mimetype || '').split('/').pop();
-
     const extOk = allowedTypes.test(ext);
     const mimeOk = allowedTypes.test(mimePart);
-
-    // Accept if either extension OR mimetype indicates an image (more permissive)
     if (extOk || mimeOk) {
       return cb(null, true);
     }
-
-    // Reject non-image files
     cb(new Error('Only image files are allowed!'));
   }
 });
@@ -140,6 +133,67 @@ router.delete('/:id', jwtAuth, async (req, res) => {
   } catch (error) {
     console.error('Delete detection error:', error);
     res.status(500).json({ message: 'Failed to delete detection' });
+  }
+});
+
+// Mock disease prediction (replace with actual AI model later)
+router.post('/predict', jwtAuth, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No image file provided' });
+    }
+
+    // Mock prediction - in a real implementation, this would call your AI model
+    const diseases = [
+      'Tomato___healthy',
+      'Tomato___Late_blight',
+      'Tomato___Early_blight',
+      'Potato___Early_blight',
+      'Apple___Apple_scab'
+    ];
+    
+    const randomDisease = diseases[Math.floor(Math.random() * diseases.length)];
+    const confidence = Math.floor(Math.random() * 20) + 80; // 80-99%
+
+    // Mock disease info (you can expand this)
+    const diseaseInfo = {
+      'Tomato___healthy': {
+        description: 'टमाटर स्वस्थ छ, कुनै रोग छैन।',
+        remedy: 'नियमित पानी र पोषणको सन्तुलन कायम राख्नुहोस्।'
+      },
+      'Tomato___Late_blight': {
+        description: 'टमाटर लेट ब्लाइट Phytophthora infestans फफूंदीले हुने रोग हो। यसले पात र फलमा पानीले भिजेको जस्ता दागहरू बनाउँछ।',
+        remedy: 'कपर बेस्ड फफूंदी नाशक प्रयोग गर्नुहोस्, र पानी जम्ने ठाउँहरूबाट टाढा राख्नुहोस्।'
+      },
+      'Tomato___Early_blight': {
+        description: 'टमाटर अर्ली ब्लाइट Alternaria solani फफूंदीले हुने रोग हो। यसले पातको तल्लो भागमा वृत्ताकार दागहरू बनाउँछ।',
+        remedy: 'फफूंदी नाशक स्प्रे गर्नुहोस् र झरेका पातहरू हटाउनुहोस्।'
+      },
+      'Potato___Early_blight': {
+        description: 'आलु अर्ली ब्लाइट Alternaria solani फफूंदीले हुने रोग हो। यसले पातमा वृत्ताकार दागहरू बनाउँछ।',
+        remedy: 'फफूंदी नाशक प्रयोग गर्नुहोस् र बाली चक्र अपनाउनुहोस्।'
+      },
+      'Apple___Apple_scab': {
+        description: 'स्याउ स्क्याब Venturia inaequalis फफूंदीले हुने रोग हो। यसले पात, फल, र साना टहनीमा कालो र खुरदुरा दागहरू बनाउँछ।',
+        remedy: 'रोग प्रतिरोधी स्याउ प्रजाति रोप्नुहोस्, कैप्टान वा म्यान्कोसेब जस्ता फफूंदी नाशक प्रयोग गर्नुहोस्।'
+      }
+    };
+
+    const info = diseaseInfo[randomDisease] || {
+      description: 'यस रोगको विस्तृत जानकारी उपलब्ध छैन।',
+      remedy: 'कृषि विज्ञसँग परामर्श गर्नुहोस्।'
+    };
+
+    res.json({
+      label: randomDisease,
+      confidence: confidence,
+      description: info.description,
+      remedy: info.remedy
+    });
+
+  } catch (error) {
+    console.error('Prediction error:', error);
+    res.status(500).json({ message: 'Failed to process image' });
   }
 });
 

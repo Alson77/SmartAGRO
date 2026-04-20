@@ -5,6 +5,8 @@ const path = require('path');
 const fs = require('fs');
 const SubsidyApplication = require('../models/SubsidyApplication');
 const OngoingSubsidy = require('../models/OngoingSubsidy');
+const ScrapedSubsidy = require('../models/ScrapedSubsidy');
+const subsidyScraper = require('../services/subsidyScraper');
 
 // GET /api/subsidy/documents/:id
 router.get('/documents/:id', async (req, res) => {
@@ -244,6 +246,134 @@ router.put('/update-status/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Application not found' });
     }
     res.json({ success: true, application });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+});
+
+// SCRAPED SUBSIDY ROUTES
+
+// GET /api/subsidy/scraped - Get all scraped subsidies
+router.get('/scraped', async (req, res) => {
+  try {
+    const { limit = 50, category, subsidyType, region } = req.query;
+
+    let query = { isActive: true };
+
+    if (category) query.category = category;
+    if (subsidyType) query.subsidyType = subsidyType;
+    if (region) query.region = region;
+
+    const subsidies = await ScrapedSubsidy.find(query)
+      .sort({ lastUpdated: -1 })
+      .limit(parseInt(limit));
+
+    res.json({
+      success: true,
+      subsidies,
+      count: subsidies.length
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+});
+
+// GET /api/subsidy/scraped/:id - Get specific scraped subsidy
+router.get('/scraped/:id', async (req, res) => {
+  try {
+    const subsidy = await ScrapedSubsidy.findById(req.params.id);
+    if (!subsidy) {
+      return res.status(404).json({ success: false, message: 'Subsidy not found' });
+    }
+    res.json({ success: true, subsidy });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+});
+
+// POST /api/subsidy/scrape - Trigger manual scraping (Admin only)
+router.post('/scrape', async (req, res) => {
+  try {
+    console.log('🔄 Starting subsidy scraping process...');
+
+    // Run scraping
+    const scrapedSubsidies = await subsidyScraper.scrapeAllSources();
+
+    if (scrapedSubsidies.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No new subsidies found',
+        scraped: 0
+      });
+    }
+
+    // Update database
+    const { created, updated } = await subsidyScraper.updateDatabase(scrapedSubsidies);
+
+    res.json({
+      success: true,
+      message: `Successfully scraped ${scrapedSubsidies.length} subsidies`,
+      scraped: scrapedSubsidies.length,
+      created,
+      updated
+    });
+  } catch (err) {
+    console.error('Scraping error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error during scraping',
+      error: err.message
+    });
+  }
+});
+
+// GET /api/subsidy/scraped/stats - Get scraping statistics
+router.get('/scraped/stats', async (req, res) => {
+  try {
+    const total = await ScrapedSubsidy.countDocuments({ isActive: true });
+    const byType = await ScrapedSubsidy.aggregate([
+      { $match: { isActive: true } },
+      { $group: { _id: '$subsidyType', count: { $sum: 1 } } }
+    ]);
+    const bySource = await ScrapedSubsidy.aggregate([
+      { $match: { isActive: true } },
+      { $group: { _id: '$sourceName', count: { $sum: 1 } } }
+    ]);
+
+    const lastUpdated = await ScrapedSubsidy.findOne()
+      .sort({ lastUpdated: -1 })
+      .select('lastUpdated');
+
+    res.json({
+      success: true,
+      stats: {
+        total,
+        byType,
+        bySource,
+        lastUpdated: lastUpdated?.lastUpdated || null
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+});
+
+// PUT /api/subsidy/scraped/:id/toggle - Toggle subsidy active status (Admin only)
+router.put('/scraped/:id/toggle', async (req, res) => {
+  try {
+    const subsidy = await ScrapedSubsidy.findById(req.params.id);
+    if (!subsidy) {
+      return res.status(404).json({ success: false, message: 'Subsidy not found' });
+    }
+
+    subsidy.isActive = !subsidy.isActive;
+    await subsidy.save();
+
+    res.json({
+      success: true,
+      subsidy,
+      message: `Subsidy ${subsidy.isActive ? 'activated' : 'deactivated'}`
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
   }

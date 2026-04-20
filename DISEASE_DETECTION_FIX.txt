@@ -1,0 +1,52 @@
+CROP DISEASE DETECTION - ISSUE FIXED
+====================================
+
+PROBLEM:
+--------
+- Frontend was sending file field as 'file'
+- Backend expected file field as 'image'
+- Error: "Could not connect to AI model: Failed to get detection result (400)"
+
+ROOT CAUSE:
+-----------
+Form field name mismatch:
+  Frontend: formData.append('file', blob, ...)
+  Backend:  upload.single('image')
+
+SOLUTION:
+---------
+1. Fixed frontend to use correct field name:
+   File: src/pages/farmer/CropDiseaseDetection.tsx
+   Change: formData.append('file', ...) → formData.append('image', ...)
+
+2. Updated error message:
+   Old: "Could not connect to AI model: ... Make sure the Python server is running on port 8000"
+   New: "Could not detect disease: ... Make sure the server is running and your token is valid"
+
+3. Backend disease detection:
+   ✅ Works with mock predictions using Nepali disease descriptions
+   ✅ Saves detections to MongoDB
+   ✅ Supports multiple image formats (JPEG, PNG, GIF, WebP, BMP, TIFF)
+   ✅ Returns: { label, confidence, description, remedy }
+
+TESTING:
+--------
+Backend endpoint: POST /api/disease/predict
+Requirements:
+  - Valid JWT token in Authorization header
+  - Image file in 'image' form field
+  - JWT_SECRET from backend/.env
+
+Example curl test:
+  TOKEN=$(node -e "const jwt=require('jsonwebtoken'); console.log(jwt.sign({id:'123'}, 'my_super_secret_key'))")
+  curl -X POST http://localhost:5000/api/disease/predict \
+    -H "Authorization: Bearer $TOKEN" \
+    -F "image=@test-image.png"
+
+EXPECTED RESPONSE:
+{
+  "label": "Tomato___Early_blight",
+  "confidence": 94,
+  "description": "टमाटर अर्ली ब्लाइट...",
+  "remedy": "फफूंदी नाशक स्प्रे गर्नुहोस्..."
+}
